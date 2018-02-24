@@ -54,7 +54,7 @@ pub mod query {
             HyperLogLogger::new(fname).expect("failed to build model");
 
         for (count, subreddit) in model.query(sentence, 10) {
-            println!("{:.2}\t{}", count, subreddit);
+            println!("{:6.3}\t{}", count, subreddit);
         }
     }
 }
