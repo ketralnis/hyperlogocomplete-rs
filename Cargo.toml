@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["David King <dking@ketralnis.com>"]
 
 [dependencies]
-basichll = "0.3.1"
+basichll = {version="0.3.1", path="/Users/dking/sync/src/hyperlogocomplete/hyperlogocomplete/hyperlogocomplete/dep/hll.rs"}
 clap = "2.30.0"
 flate2 = "1.0.1"
 itertools = "0.7.6"
@@ -13,3 +13,4 @@ pbr = "1.0.0"
 regex = "0.2.6"
 rusqlite = "0.13.0"
 rust-stemmers = "1.0.2"
+

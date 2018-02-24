@@ -1,11 +1,16 @@
 use std::path::Path;
 use std::fs::remove_file;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
+use std::collections::HashMap;
+use std::io::Cursor;
 
 use basichll::HLL;
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use rusqlite;
+use flate2::read::GzDecoder;
+
+use super::token::tokenise;
 
 pub struct HyperLogLogger {
     conn: rusqlite::Connection,
@@ -58,6 +63,58 @@ impl HyperLogLogger {
 
         let ret = HyperLogLogger { conn: conn };
         Ok(ret)
+    }
+
+    pub fn query(
+        &mut self,
+        sentence: &str,
+        limit: usize,
+    ) -> Vec<(f64, String)> {
+        let mut my_hlls = HashMap::new();
+        for token in tokenise(sentence) {
+            for (subreddit, hll) in self.get_hlls(&token) {
+                my_hlls
+                    .entry(subreddit)
+                    .and_modify(|existing| {
+                        let new = &*existing + &hll;
+                        *existing = new;
+                    })
+                    .or_insert(hll);
+            }
+        }
+        let mut counted: Vec<(f64, String)> = my_hlls
+            .iter()
+            .map(|(sr, hll)| (hll.count(), sr.to_owned()))
+            .collect();
+        counted.sort_by(|a, b| b.partial_cmp(a).expect("got a nan"));
+        counted.truncate(limit);
+        counted
+    }
+
+    fn get_hlls(&mut self, token: &str) -> Vec<(String, HLL)> {
+        let mut stmt = self.conn
+            .prepare("SELECT subreddit, blob FROM words WHERE token=?")
+            .expect("failed to prepare");
+        let rows = stmt.query_map(&[&token], |row| {
+            let sr: String = row.get(0);
+            let blob: Vec<u8> = row.get(1);
+
+            let cursor = Cursor::new(&blob);
+            let mut decompressed = Vec::new();
+            let mut decoder = GzDecoder::new(cursor);
+            decoder
+                .read_to_end(&mut decompressed)
+                .expect("failed to read to end");
+
+            (sr, HLL::from_vec(decompressed))
+        }).expect("failed to query map");
+
+        let mut ret = Vec::new();
+        for row in rows {
+            let (sr, hll) = row.expect("bad row");
+            ret.push((sr, hll))
+        }
+        ret
     }
 
     pub fn delete_if_exists(fname: &Path) -> Result<(), io::Error> {
