@@ -42,27 +42,19 @@ pub fn _main(app_name: &str) {
         ret
     });
 
-    let tuples = timeit("tokenising everything", move || {
-        let mut tuples = Vec::new();
-        for line in PbIter::new(lines.into_iter()) {
-            let mut splitted = line.split('\t');
-            let subreddit = splitted.next().expect("no subreddit").to_owned();
-            let fullname = splitted.next().expect("no fullname").to_owned();
-            let text = splitted.next().expect("no text").to_owned();
-            let tokens: Vec<String> = tokenise(&text).into_iter().collect();
-            tuples.push((subreddit, fullname, tokens));
-        }
-        return tuples;
-    });
-
     let hlls: Vec<(String, String, HLL)> = timeit("building hlls", move || {
         mapreduce(
-            PbIter::new(tuples.into_iter()),
-            |(subreddit, fullname, tokens)| {
+            PbIter::new(lines.into_iter()),
+            |line| {
+                let mut splitted = line.split('\t');
+                let subreddit = splitted.next().expect("no subreddit");
+                let fullname = splitted.next().expect("no fullname");
+                let text = splitted.next().expect("no text");
+                let tokens = tokenise(&text);
                 let mut ret = Vec::new();
                 for token in tokens {
                     ret.push((
-                        (token, subreddit.to_owned()),
+                        (token.to_owned(), subreddit.to_owned()),
                         fullname.to_owned(),
                     ));
                 }

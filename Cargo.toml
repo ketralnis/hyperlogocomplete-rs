@@ -13,4 +13,3 @@ pbr = "1.0.0"
 regex = "0.2.6"
 rusqlite = "0.13.0"
 rust-stemmers = "1.0.2"
-
