@@ -1,0 +1,15 @@
+[package]
+name = "hyperlogocomplete"
+version = "0.1.0"
+authors = ["David King <dking@ketralnis.com>"]
+
+[dependencies]
+basichll = "0.3.1"
+clap = "2.30.0"
+flate2 = "1.0.1"
+itertools = "0.7.6"
+lazy_static = "1.0.0"
+pbr = "1.0.0"
+regex = "0.2.6"
+rusqlite = "0.13.0"
+rust-stemmers = "1.0.2"
