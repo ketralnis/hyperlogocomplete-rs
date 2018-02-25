@@ -1,16 +1,17 @@
 use std::io;
 use std::path::Path;
 use std::io::BufRead;
+use std::sync::mpsc;
 
 use basichll::HLL;
 use clap::{App, Arg};
 use pbr::PbIter;
+use pipelines;
 
-use super::model::{HyperLogLogger, Prepared};
+use super::model::HyperLogLogger;
 use super::ERROR_RATE;
 use super::token::tokenise;
 use super::utils::timeit;
-use super::mapreduce::mapreduce;
 
 pub fn main(app_name: &str) {
     timeit("doing everything", || _main(app_name))
@@ -42,49 +43,62 @@ pub fn _main(app_name: &str) {
         ret
     });
 
-    let hlls: Vec<(String, String, HLL)> = timeit("building hlls", move || {
-        mapreduce(
-            PbIter::new(lines.into_iter()),
-            |line| {
-                let mut splitted = line.split('\t');
-                let subreddit = splitted.next().expect("no subreddit");
-                let fullname = splitted.next().expect("no fullname");
-                let text = splitted.next().expect("no text");
-                let tokens = tokenise(&text);
-                let mut ret = Vec::new();
-                for token in tokens {
-                    ret.push((
-                        (token.to_owned(), subreddit.to_owned()),
-                        fullname.to_owned(),
-                    ));
-                }
-                ret
-            },
-            |&(ref token, ref subreddit), vals| {
-                let mut hll = HLL::new(ERROR_RATE);
-                for fullname in vals {
-                    hll.insert(&fullname);
-                }
-                vec![(token.to_owned(), subreddit.to_owned(), hll)]
-            },
-        )
-    });
+    timeit("building hlls", move || {
+        let bufsize = 10; // TODO can we get rid of this noise?
+        let workers = 4;
 
-    let prepared: Vec<Prepared> = timeit("preparing hlls", move || {
-        let mut prepared = Vec::new();
-        for (token, subreddit, hll) in PbIter::new(hlls.into_iter()) {
-            let item = HyperLogLogger::prepare_hll(token, subreddit, hll);
-            prepared.push(item);
+        pipelines::Pipeline::from(PbIter::new(lines.into_iter()), bufsize)
+            .then(
+                pipelines::Multiplex::from(TokeniserEntry, workers, bufsize),
+                bufsize,
+            )
+            .reduce(
+                |(token, subreddit), fullnames| {
+                    let mut hll = HLL::new(ERROR_RATE);
+                    for fullname in fullnames {
+                        hll.insert(&fullname);
+                    }
+                    HyperLogLogger::prepare_hll(token, subreddit, hll)
+                },
+                bufsize,
+            )
+            .pipe(
+                move |rx, tx| {
+                    let mut transaction = model.transaction();
+
+                    for prepared in rx {
+                        transaction.insert(prepared);
+                    }
+                    transaction.commit();
+                    tx.send(()).expect("failed finish");
+                },
+                bufsize,
+            )
+            .drain()
+    });
+}
+
+#[derive(Copy, Clone)]
+struct TokeniserEntry;
+
+impl pipelines::PipelineEntry<String, ((String, String), String)>
+    for TokeniserEntry
+{
+    fn process<I: IntoIterator<Item = String>>(
+        self,
+        rx: I,
+        tx: mpsc::SyncSender<((String, String), String)>,
+    ) {
+        for line in rx {
+            let mut splitted = line.split('\t');
+            let subreddit = splitted.next().expect("no subreddit").to_string();
+            let fullname = splitted.next().expect("no fullname").to_string();
+            let text = splitted.next().expect("no text");
+            let tokens = tokenise(&text);
+            for token in tokens {
+                tx.send(((subreddit.to_owned(), token), fullname.to_owned()))
+                    .expect("failed self");
+            }
         }
-        prepared
-    });
-
-    timeit("storing hlls", move || {
-        let mut transaction = model.transaction();
-
-        for prepared in PbIter::new(prepared.into_iter()) {
-            transaction.insert(prepared);
-        }
-        transaction.commit()
-    });
+    }
 }

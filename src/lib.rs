@@ -10,11 +10,11 @@ extern crate itertools;
 #[macro_use]
 extern crate lazy_static;
 extern crate pbr;
+extern crate pipelines;
 extern crate regex;
 extern crate rusqlite;
 extern crate rust_stemmers;
 
-pub mod mapreduce;
 pub mod token;
 pub mod model;
 pub mod make_hll;
