@@ -48,14 +48,12 @@ pub fn _main(app_name: &str) {
         pipelines::Pipeline::from(PbIter::new(lines.into_iter()))
             .ppipe(
                 workers,
-                |rx: pipelines::LockedReceiver<String>,
-                 tx: pipelines::Sender<((String, String), String)>| {
+                |tx: pipelines::Sender<((String, String), String)>,
+                 rx: pipelines::LockedReceiver<String>| {
                     for line in rx {
                         let mut splitted = line.split('\t');
-                        let subreddit =
-                            splitted.next().expect("no subreddit");
-                        let fullname =
-                            splitted.next().expect("no fullname");
+                        let subreddit = splitted.next().expect("no subreddit");
+                        let fullname = splitted.next().expect("no fullname");
                         let text = splitted.next().expect("no text");
                         let tokens = tokenise(&text);
                         for token in tokens {
@@ -79,7 +77,7 @@ pub fn _main(app_name: &str) {
                 }
                 Some(HyperLogLogger::prepare_hll(token, subreddit, hll))
             })
-            .pipe(move |rx, tx| {
+            .pipe(move |tx, rx| {
                 let mut transaction = model.transaction();
 
                 for prepared in rx {
