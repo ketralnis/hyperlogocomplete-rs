@@ -104,7 +104,7 @@ dependencies = [
  "itertools 0.7.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pbr 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "pipelines 0.2.0",
+ "pipelines 0.3.0",
  "regex 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "rusqlite 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rust-stemmers 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -189,7 +189,7 @@ dependencies = [
 
 [[package]]
 name = "pipelines"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "chan 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
