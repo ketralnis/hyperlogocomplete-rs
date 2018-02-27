@@ -53,14 +53,14 @@ pub fn _main(app_name: &str) {
                     for line in rx {
                         let mut splitted = line.split('\t');
                         let subreddit =
-                            splitted.next().expect("no subreddit").to_string();
+                            splitted.next().expect("no subreddit");
                         let fullname =
-                            splitted.next().expect("no fullname").to_string();
+                            splitted.next().expect("no fullname");
                         let text = splitted.next().expect("no text");
                         let tokens = tokenise(&text);
                         for token in tokens {
                             tx.send((
-                                (subreddit.to_owned(), token.to_string()),
+                                (token, subreddit.to_owned()),
                                 fullname.to_owned(),
                             ));
                         }
@@ -68,17 +68,24 @@ pub fn _main(app_name: &str) {
                 },
             )
             .preduce(workers, |(token, subreddit), fullnames| {
+                //println!("starting worker for {:?} ({} entries)", (&token, &subreddit), fullnames.len());
+                let count = fullnames.len();
+                if count < 3 {
+                    return None;
+                }
                 let mut hll = HLL::new(ERROR_RATE);
                 for fullname in fullnames {
                     hll.insert(&fullname);
                 }
-                HyperLogLogger::prepare_hll(token, subreddit, hll)
+                Some(HyperLogLogger::prepare_hll(token, subreddit, hll))
             })
             .pipe(move |rx, tx| {
                 let mut transaction = model.transaction();
 
                 for prepared in rx {
-                    transaction.insert(prepared);
+                    if let Some(prepared) = prepared {
+                        transaction.insert(prepared);
+                    }
                 }
                 transaction.commit();
                 tx.send(());
