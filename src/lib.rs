@@ -111,6 +111,16 @@ pub mod utils {
             return self.underlying.next();
         }
     }
+
+    impl<I, T> Drop for MyBar<I, T>
+    where
+        I: Iterator<Item = T>,
+    {
+        fn drop(&mut self) {
+            self.bar.finish()
+        }
+    }
+
 }
 
 #[cfg(test)]

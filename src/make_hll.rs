@@ -45,7 +45,7 @@ pub fn _main(app_name: &str) {
     let num_lines = lines.len();
 
     timeit("building hlls", move || {
-        let workers = 8;
+        let workers = 6;
 
         pipelines::Pipeline::from(MyBar::new(
             lines.into_iter(),
