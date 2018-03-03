@@ -105,7 +105,10 @@ pub fn _main(app_name: &str) {
 
                 // now we have everything, so prepare the HLLs and send them on to be written
                 timeit("preparing hlls", || {
-                    for ((token, subreddit), hll) in hm.into_iter() {
+                    let len = { hm.len() as u64 };
+                    for ((token, subreddit), hll) in
+                        MyBar::new(hm.into_iter(), len, 1000)
+                    {
                         if hll.count() < 3.0 {
                             continue;
                         }
