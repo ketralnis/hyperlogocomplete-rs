@@ -48,7 +48,7 @@ impl HyperLogLogger {
         let conn = rusqlite::Connection::open(fname)?;
         conn.execute_batch(
             "
-            PRAGMA journal_mode=NONE;
+            PRAGMA journal_mode=WAL;
             PRAGMA synchronous=off;
 
             CREATE TABLE IF NOT EXISTS
