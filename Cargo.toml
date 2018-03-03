@@ -10,7 +10,7 @@ flate2 = "1.0.1"
 itertools = "0.7.6"
 lazy_static = "1.0.0"
 pbr = "1.0.0"
-pipelines = {version="*", path="/Users/dking/sync/src/pipelines-rs"}
+pipelines = {version="0.4.0", path="/Users/dking/sync/src/pipelines-rs"}
 regex = "0.2.6"
 rusqlite = "0.13.0"
 rust-stemmers = "1.0.2"

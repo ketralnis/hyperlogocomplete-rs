@@ -72,6 +72,45 @@ pub mod utils {
         println!("finished {} in {:.2}s", name, took);
         ret
     }
+
+    use pbr;
+    use std::io::Stdout;
+
+    pub struct MyBar<I, T>
+    where
+        I: Iterator<Item = T>,
+    {
+        bar: pbr::ProgressBar<Stdout>,
+        underlying: I,
+        last_report: u64,
+        verbosity: u64,
+    }
+
+    impl<T, I: Iterator<Item = T>> MyBar<I, T> {
+        pub fn new(underlying: I, size: u64, verbosity: u64) -> Self {
+            let bar = pbr::ProgressBar::new(size);
+            Self {
+                underlying,
+                bar,
+                verbosity,
+                last_report: 0,
+            }
+        }
+    }
+
+    impl<I, T> Iterator for MyBar<I, T>
+    where
+        I: Iterator<Item = T>,
+    {
+        type Item = T;
+        fn next(&mut self) -> Option<T> {
+            self.last_report += 1;
+            if self.last_report % self.verbosity == 0 {
+                self.bar.set(self.last_report);
+            }
+            return self.underlying.next();
+        }
+    }
 }
 
 #[cfg(test)]
