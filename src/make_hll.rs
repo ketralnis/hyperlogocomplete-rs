@@ -1,6 +1,7 @@
+use std::collections::HashMap;
+use std::io::Read;
 use std::io;
 use std::path::Path;
-use std::io::BufRead;
 
 use basichll::HLL;
 use clap::{App, Arg};
@@ -33,19 +34,25 @@ pub fn _main(app_name: &str) {
 
     let mut model = HyperLogLogger::new(fname).expect("failed to build model");
 
-    let lines: Vec<String> = timeit("reading file", || {
-        let mut ret = Vec::new();
+    let lines: Vec<Vec<u8>> = timeit("reading file", || {
+        // we could do the splitting in the producer thread instead and it would actually be faster
+        // because we could avoid a lot of the copies. but we do it here in the main thread so that
+        // we can have an accurate progress bar
+        let mut stdin_data = Vec::new();
         let stdin = io::stdin();
-        for line in stdin.lock().lines() {
-            ret.push(line.expect("bad line").to_owned())
-        }
-        ret
+        let mut locked = stdin.lock();
+        locked.read_to_end(&mut stdin_data).expect("failed read");
+        let lines = stdin_data
+            .split(|ch| *ch == b'\n')
+            .map(|line| line.to_owned())
+            .collect();
+        lines
     });
 
     let num_lines = lines.len();
 
     timeit("building hlls", move || {
-        let workers = 6;
+        let workers = 4;
 
         pipelines::Pipeline::from(MyBar::new(
             lines.into_iter(),
@@ -54,14 +61,30 @@ pub fn _main(app_name: &str) {
         )).configure(
             pipelines::PipelineConfig::default()
                 .batch_size(1000)
-                .buff_size(50),
+                .buff_size(5),
         )
             .ppipe(workers, |tx, rx| {
                 for line in rx {
-                    let mut splitted = line.split('\t');
-                    let subreddit = splitted.next().expect("no subreddit");
-                    let fullname = splitted.next().expect("no fullname");
-                    let text = splitted.next().expect("no text");
+                    let mut splitted = line.splitn(3, |ch| *ch == b'\t');
+
+                    let subreddit = if let Some(x) = optimistic(splitted.next())
+                    {
+                        x
+                    } else {
+                        continue;
+                    };
+                    let fullname = if let Some(x) = optimistic(splitted.next())
+                    {
+                        x
+                    } else {
+                        continue;
+                    };
+                    let text = if let Some(x) = optimistic(splitted.next()) {
+                        x
+                    } else {
+                        continue;
+                    };
+
                     let tokens = tokenise(&text);
                     for token in tokens {
                         tx.send((
@@ -71,29 +94,49 @@ pub fn _main(app_name: &str) {
                     }
                 }
             })
-            .preduce(workers, |(token, subreddit), fullnames| {
-                //println!("starting worker for {:?} ({} entries)", (&token, &subreddit), fullnames.len());
-                let count = fullnames.len();
-                if count < 3 {
-                    return None;
+            .distribute(workers, |tx, rx| {
+                // read in all of the data and build HLLs out of them as their data comes in
+                let mut hm = HashMap::new();
+                for ((token, subreddit), fullname) in rx {
+                    hm.entry((token, subreddit))
+                        .or_insert_with(|| HLL::new(ERROR_RATE))
+                        .insert(&fullname);
                 }
-                let mut hll = HLL::new(ERROR_RATE);
-                for fullname in fullnames {
-                    hll.insert(&fullname);
-                }
-                Some(HyperLogLogger::prepare_hll(token, subreddit, hll))
+
+                // now we have everything, so prepare the HLLs and send them on to be written
+                timeit("preparing hlls", || {
+                    for ((token, subreddit), hll) in hm.into_iter() {
+                        if hll.count() < 3.0 {
+                            continue;
+                        }
+                        let prepared =
+                            HyperLogLogger::prepare_hll(token, subreddit, hll);
+                        tx.send(prepared);
+                    }
+                });
             })
             .pipe(move |tx, rx| {
                 let mut transaction = model.transaction();
 
                 for prepared in rx {
-                    if let Some(prepared) = prepared {
-                        transaction.insert(prepared);
-                    }
+                    transaction.insert(prepared);
                 }
                 transaction.commit();
-                tx.send(());
+                tx.send(()); // signal completion
             })
             .drain()
     });
+}
+
+fn optimistic(text: Option<&[u8]>) -> Option<String> {
+    if !text.is_some() {
+        return None;
+    }
+    let text = text.unwrap().to_owned();
+
+    let text = String::from_utf8(text);
+    if !text.is_ok() {
+        return None;
+    }
+    return Some(text.unwrap());
 }

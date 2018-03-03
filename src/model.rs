@@ -53,10 +53,10 @@ impl HyperLogLogger {
 
             CREATE TABLE IF NOT EXISTS
             words(
-                token NOT NULL,
-                subreddit NOT NULL,
+                token BLOB NOT NULL,
+                subreddit BLOB NOT NULL,
                 card FLOAT NOT NULL,
-                blob NOT NULL,
+                data BLOB NOT NULL,
                 PRIMARY KEY (token, subreddit));
             ",
         )?;
@@ -93,7 +93,7 @@ impl HyperLogLogger {
 
     fn get_hlls(&mut self, token: &str) -> Vec<(String, HLL)> {
         let mut stmt = self.conn
-            .prepare("SELECT subreddit, blob FROM words WHERE token=?")
+            .prepare("SELECT subreddit, data FROM words WHERE token=?")
             .expect("failed to prepare");
         let rows = stmt.query_map(&[&token], |row| {
             let sr: String = row.get(0);
@@ -144,20 +144,21 @@ pub struct Transaction<'a> {
 
 impl<'a> Transaction<'a> {
     pub fn insert(&mut self, prepared: Prepared) {
-        self.tx
-            .execute(
-                "
-                INSERT INTO words(token, subreddit, card, blob)
+        let success = self.tx.execute(
+            "
+                INSERT INTO words(token, subreddit, card, data)
                 VALUES (?,?,?,?)
                 ",
-                &[
-                    &prepared.token,
-                    &prepared.subreddit,
-                    &prepared.size,
-                    &prepared.blob,
-                ],
-            )
-            .expect("failed conn execute");
+            &[
+                &prepared.token,
+                &prepared.subreddit,
+                &prepared.size,
+                &prepared.blob,
+            ],
+        );
+        if !success.is_ok() {
+            println!("failed insert: {:?}", success);
+        }
     }
 
     pub fn commit(self) {
