@@ -16,6 +16,7 @@ pub struct HyperLogLogger {
     conn: rusqlite::Connection,
 }
 
+#[derive(Debug)]
 pub struct Prepared {
     blob: Vec<u8>,
     size: f64,
@@ -157,7 +158,7 @@ impl<'a> Transaction<'a> {
             ],
         );
         if !success.is_ok() {
-            println!("failed insert: {:?}", success);
+            println!("failed insert: {:?}: {:?}", success, prepared);
         }
     }
 

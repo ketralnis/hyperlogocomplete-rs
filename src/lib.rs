@@ -64,12 +64,12 @@ pub mod utils {
 
     pub fn timeit<Out, F: FnOnce() -> Out>(name: &str, func: F) -> Out {
         let start_time = Instant::now();
-        println!("starting {}", name);
+        eprintln!("starting {}", name);
         let ret = func();
         let duration = start_time.elapsed();
         let took =
             duration.as_secs() as f64 + duration.subsec_nanos() as f64 * 1e-9;
-        println!("finished {} in {:.2}s", name, took);
+        eprintln!("finished {} in {:.2}s", name, took);
         ret
     }
 

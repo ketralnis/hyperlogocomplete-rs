@@ -1,7 +1,56 @@
 use std::collections::HashSet;
+use std::io::BufRead;
+use std::io;
 
 use regex::Regex;
 use rust_stemmers::{Algorithm, Stemmer};
+
+pub fn main(_app_name: &str) {
+    let stdin = io::stdin();
+    let locked = stdin.lock();
+    for line in locked.lines() {
+        if !line.is_ok() {
+            continue;
+        }
+        let line = line.unwrap();
+
+        let mut splitted = line.splitn(3, "\t");
+
+        let subreddit = if let Some(x) = optimistic(splitted.next()) {
+            x
+        } else {
+            continue;
+        };
+        let fullname = if let Some(x) = optimistic(splitted.next()) {
+            x
+        } else {
+            continue;
+        };
+        let text = if let Some(x) = optimistic(splitted.next()) {
+            x
+        } else {
+            continue;
+        };
+
+        let tokens = tokenise(&text);
+        for token in tokens {
+            println!(
+                "{token}/{subreddit}\t{token}\t{subreddit}\t{fullname}",
+                token = token,
+                subreddit = subreddit,
+                fullname = fullname
+            );
+        }
+    }
+}
+
+fn optimistic(text: Option<&str>) -> Option<String> {
+    if !text.is_some() {
+        return None;
+    }
+    let text = text.unwrap().to_owned();
+    Some(text)
+}
 
 pub fn tokenise<'a>(sentence: &'a str) -> HashSet<String> {
     lazy_static! {
